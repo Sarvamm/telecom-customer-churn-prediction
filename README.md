@@ -52,17 +52,63 @@ The notebook `eda.ipynb` was used to understand the structure of the dataset and
 The processed dataset is saved to:
 - `data/processed/telco-clean.csv`
 
-This cleaned file contains the features used in model training, including:
-- `SeniorCitizen`
-- `tenure`
-- `InternetService`
-- `Contract`
-- `PaperlessBilling`
-- `MonthlyCharges`
-- `family_score`
-- `Internet_service_score`
-- `Payment_Electronic_check`
-- `Churn`
+### Engineered feature schema
+
+The processed CSV contains nine model input features and the `Churn` target:
+
+| Column | Type | Definition / encoding |
+|---|---|---|
+| `SeniorCitizen` | Integer | Senior-citizen indicator: `1` = yes, `0` = no |
+| `tenure` | Integer | Length of the customer relationship, in months |
+| `InternetService` | Integer | `0` = no internet service, `1` = DSL, `2` = fiber optic |
+| `Contract` | Integer | `0` = month-to-month, `1` = one year, `2` = two year |
+| `PaperlessBilling` | Integer | `1` = yes, `0` = no |
+| `MonthlyCharges` | Float | Customer's monthly charges |
+| `family_score` | Integer | `Partner` + `Dependents`, each encoded as yes = `1`, no = `0`; range `0`-`2` |
+| `Internet_service_score` | Float | Sum of TechSupport, DeviceProtection, OnlineBackup, and OnlineSecurity; yes = `1`, no = `0`, no internet service = `-0.25` per add-on (score `-1` when there is no internet service) |
+| `Payment_Electronic_check` | Integer | `1` = electronic check, `0` = any other payment method |
+| `Churn` (target) | Integer | `1` = churn, `0` = no churn |
+
+## Data preparation and modeling pipeline
+
+```mermaid
+flowchart TD
+    A["Raw Telco Customer Churn CSV"] --> B["Clean data<br/>Drop customerID and gender<br/>Fix TotalCharges for zero-tenure accounts"]
+    B --> C["Engineer and encode features<br/>Create family and internet-service scores<br/>Encode contract, payment, and Churn<br/>Drop TotalCharges"]
+    C --> D["Save processed data<br/>data/processed/telco-clean.csv"]
+
+    D --> E["Stratified split<br/>80% development data / 20% hold-out test"]
+    E --> F["Split development data<br/>80% training / 20% validation"]
+    F --> G["Train and tune classifiers<br/>Random Forest, Decision Tree,<br/>Logistic Regression, XGBoost, SVM<br/>GridSearchCV"]
+    G --> H["Compare validation metrics<br/>Accuracy, precision, recall, and F1"]
+    H --> I["Select best model<br/>Random Forest"]
+    I --> J["Refit on full development data"]
+    J --> K["Evaluate on hold-out test set"]
+    J --> L["Save model artifact<br/>models/best_model.joblib"]
+```
+
+## Project architecture
+
+```mermaid
+flowchart LR
+    subgraph Training["Offline data preparation and training"]
+        RAW["data/raw/<br/>Telco-Customer-Churn.csv"] --> EDA["eda.ipynb<br/>Clean and engineer features"]
+        EDA --> CLEAN["data/processed/<br/>telco-clean.csv"]
+        CLEAN --> MODEL["modelling.ipynb<br/>Train, tune, and evaluate"]
+        MODEL --> ARTIFACT["models/<br/>best_model.joblib"]
+    end
+
+    subgraph Serving["Churn prediction application"]
+        USER["User"] --> APP["Streamlit UI<br/>App.py"]
+        APP --> FEATURES["Build 9-feature input vector"]
+        FEATURES --> PREDICT["Predict churn class<br/>and probabilities"]
+        PREDICT --> RESULT["Display churn status<br/>and probability breakdown"]
+        RESULT --> USER
+    end
+
+    ARTIFACT --> LOAD["Load trained model<br/>with joblib"]
+    LOAD --> PREDICT
+```
 
 ## What was done in the modeling notebook
 
